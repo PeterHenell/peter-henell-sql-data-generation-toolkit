@@ -2,16 +2,26 @@
 /*
 Sample usage:
 
-INSERT INTO someTable(dateColumn, dateColumn, dateColumn, intColumn, decimalColumn, varcharColumn)
 SELECT 
-	gen.day_series(N, '2014-01-01', DEFAULT) AS [Day series],
-	gen.minute_series(N, '2014-01-01', DEFAULT) AS [Minute series],
-	gen.hour_series(N, '2014-01-01', DEFAULT) AS [Hour series],
+	gen.days(N, '2014-01-01', DEFAULT) AS [Day series],
+	gen.minutes(N, '2014-01-01', DEFAULT) AS [Minute series],
+	gen.seconds(N, '2014-01-01', DEFAULT) AS [Seconds series],
+	gen.hours(N, '2014-01-01', DEFAULT) AS [Hour series],
 	gen.ints(N, DEFAULT, DEFAULT, DEFAULT) AS [Ints],
 	gen.decimals(N, DEFAULT, DEFAULT, DEFAULT) AS [Decimal numbers],
 	gen.strings(N, 10, 25) AS [Strings]
 FROM 
 	gen.generate_range(1, 1000);
+	
+
+SELECT 
+	startDate,
+	endDate
+FROM 
+	gen.generate_range(1, 1000)
+CROSS APPLY(VALUES(gen.hours(N, '2014-01-01', DEFAULT))) as a(startdate)
+CROSS APPLY(VALUES(gen.minutes(RAND(N), startDate, DEFAULT))) as b(endDate)
+
 	
 	
 
@@ -46,10 +56,10 @@ WITH SCHEMABINDING
 GO
 
 
-IF object_id(N'gen.day_series', N'FN') IS NOT NULL
-    DROP FUNCTION gen.day_series
+IF object_id(N'gen.days', N'FN') IS NOT NULL
+    DROP FUNCTION gen.days
 GO
-CREATE FUNCTION gen.day_series(@n bigint, @from datetime2(7), @step tinyint = 1)
+CREATE FUNCTION gen.days(@n bigint, @from datetime2(7), @step tinyint = 1)
 RETURNS datetime2(7)
 WITH schemabinding
 AS
@@ -58,10 +68,10 @@ BEGIN
 END
 GO
 
-IF object_id(N'gen.second_series', N'FN') IS NOT NULL
-    DROP FUNCTION gen.second_series
+IF object_id(N'gen.seconds', N'FN') IS NOT NULL
+    DROP FUNCTION gen.seconds
 GO
-CREATE FUNCTION gen.second_series(@n bigint, @from datetime2(7), @step tinyint = 1)
+CREATE FUNCTION gen.seconds(@n bigint, @from datetime2(7), @step tinyint = 1)
 RETURNS datetime2(7)
 WITH schemabinding
 AS
@@ -70,10 +80,10 @@ BEGIN
 END
 GO
 
-IF object_id(N'gen.minute_series', N'FN') IS NOT NULL
-    DROP FUNCTION gen.minute_series
+IF object_id(N'gen.minutes', N'FN') IS NOT NULL
+    DROP FUNCTION gen.minutes
 GO
-CREATE FUNCTION gen.minute_series(@n bigint, @from datetime2(7), @step tinyint = 1)
+CREATE FUNCTION gen.minutes(@n bigint, @from datetime2(7), @step tinyint = 1)
 RETURNS datetime2(7)
 WITH schemabinding
 AS
@@ -82,10 +92,10 @@ BEGIN
 END
 GO
 
-IF object_id(N'gen.hour_series', N'FN') IS NOT NULL
-    DROP FUNCTION gen.hour_series
+IF object_id(N'gen.hours', N'FN') IS NOT NULL
+    DROP FUNCTION gen.hours
 GO
-CREATE FUNCTION gen.hour_series(@n bigint, @from datetime2(7), @step tinyint = 1)
+CREATE FUNCTION gen.hours(@n bigint, @from datetime2(7), @step tinyint = 1)
 RETURNS datetime2(7)
 WITH schemabinding
 AS
