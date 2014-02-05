@@ -1,6 +1,6 @@
 
 /*
-sample usage:
+Sample usage:
 
 INSERT INTO someTable(dateColumn, dateColumn, dateColumn, intColumn, decimalColumn, varcharColumn)
 SELECT 
