@@ -1,3 +1,5 @@
+SET NOCOUNT ON;
+
 IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gen')
 BEGIN
 	EXEC('CREATE SCHEMA [gen] AUTHORIZATION [dbo]');
@@ -45,8 +47,22 @@ GO
 IF OBJECT_ID(N'gen.strings', N'FN') IS NOT NULL
     DROP FUNCTION gen.strings
 GO
+IF OBJECT_ID(N'gen.CreatedObjects') IS NOT NULL
+BEGIN
+	
+	IF OBJECT_ID('gen.DropAllGeneratedFunctions', N'P') IS NOT NULL
+		EXEC gen.DropAllGeneratedFunctions;
+	
+	DROP TABLE gen.CreatedObjects;
+END
+GO
 
-
+CREATE TABLE gen.CreatedObjects (
+	Id INt IDENTITY(1, 1) PRIMARY KEY,
+	CreateStatement varchar(MAX), 
+	DropStatement  varchar(MAX)
+)
+GO
 
 CREATE FUNCTION gen.generate_range(@from BIGINT, @to BIGINT)
 RETURNS TABLE 
@@ -195,7 +211,154 @@ WITH SCHEMABINDING
 AS
 	RETURN 
 		SELECT
-			gen.rints(@min, @max) AS random
-		FROM 
-			gen.generate_range(1, @rows)
+			random.a,
+			random.b,
+			random.c,
+			random.d,
+			random.e,
+			random.f,
+			random.g,
+			random.h,
+			random.i,
+			random.j
+		FROM gen.generate_range(1, @rows)
+		CROSS APPLY gen.rint_row(@min, @max) AS random;
 GO
+
+
+
+DECLARE  @sql TABLE (functionCreation VARCHAR(MAX), functiondrop VARCHAR(MAX))
+INSERT @sql ( functionCreation, functiondrop )
+SELECT 
+	REPLACE(REPLACE(REPLACE(REPLACE('
+CREATE FUNCTION gen.getPK_TABLE_NAME(@n BIGINT = 1)
+RETURNS DATA_TYPE
+WITH SCHEMABINDING
+AS
+BEGIN	
+	RETURN 
+		(SELECT COLUMN_NAME 
+		FROM TABLE_SCHEMA.TABLE_NAME
+		ORDER BY 1
+		OFFSET (@n - 1) ROWS FETCH NEXT 1 ROWS ONLY)
+END
+  ' , 'TABLE_SCHEMA', TABLE_SCHEMA)
+	, 'TABLE_NAME', TABLE_NAME)
+	, 'COLUMN_NAME', COLUMN_NAME)
+	, 'DATA_TYPE', DATA_TYPE) AS functionCreation
+
+,REPLACE('IF OBJECT_ID(N''gen.getPK_TABLE_NAME'', N''FN'') IS NOT NULL
+    DROP FUNCTION gen.getPK_TABLE_NAME;',
+		'TABLE_NAME', TABLE_NAME) AS functiondrop
+FROM 
+(
+	SELECT 
+		t.TABLE_SCHEMA, 
+		t.TABLE_NAME,
+		kc.COLUMN_NAME,
+		CASE c.DATA_TYPE WHEN 'varchar' THEN 'varchar(max)' 
+						 WHEN 'nvarchar' THEN 'nvarchar(max)' 
+						 ELSE c.DATA_TYPE END AS DATA_TYPE,
+		COUNT(*) OVER (PARTITION BY CONCAT(t.TABLE_SCHEMA, 	t.TABLE_NAME) ORDER BY CONCAT(t.TABLE_SCHEMA, 	t.TABLE_NAME)) AS keyCount
+	FROM 
+		INFORMATION_SCHEMA.tables t
+
+		INNER JOIN [INFORMATION_SCHEMA].[TABLE_CONSTRAINTS] tc
+			ON tc.TABLE_NAME = t.TABLE_NAME 
+			AND tc.TABLE_SCHEMA = t.TABLE_SCHEMA 
+			AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+		INNER JOIN INFORMATION_SCHEMA.key_column_usage kc
+			ON kc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME 
+			AND kc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA 
+			AND kc.TABLE_NAME = tc.TABLE_NAME
+		INNER JOIN INFORMATION_SCHEMA.COLUMNS c
+			ON c.TABLE_NAME = kc.TABLE_NAME 
+			AND c.TABLE_SCHEMA = tc.TABLE_SCHEMA 
+			AND c.COLUMN_NAME = kc.COLUMN_NAME
+	) AS tables
+WHERE tables.keyCount = 1 -- exclude composit primary keyed tables for now
+
+
+DECLARE @c INT = 0, @goal INT;
+SET @goal = (SELECT COUNT(*) FROM @sql);
+
+WHILE @c < @goal
+BEGIN
+	
+	DECLARE @creation VARCHAR(MAX);
+	DECLARE @drop VARCHAR(MAX);
+
+	SELECT 
+		@creation = functionCreation,
+		@drop = functiondrop
+	FROM @sql
+	ORDER BY functionCreation
+	offset @c ROWS FETCH NEXT 1 ROWS ONLY;
+
+	EXEC (@drop);
+	EXEC (@creation);
+
+	INSERT gen.CreatedObjects(CreateStatement, DropStatement)
+	VALUES(@creation, @drop);
+	
+	SET @c += 1;
+END
+
+GO
+-- TODO: räkna rader i varje tabell, använd det för att rotera om N blir mer än row_count (1, 2, 3, 1, 2, 3 etc)
+
+IF OBJECT_ID('gen.Uninstall', N'P') IS NOT NULL
+	DROP PROCEDURE gen.Uninstall
+GO
+
+CREATE PROCEDURE gen.Uninstall
+AS
+BEGIN
+	
+	IF OBJECT_ID(N'gen.rint_rows', N'IF') IS NOT NULL
+		DROP FUNCTION gen.rint_rows
+
+	IF OBJECT_ID(N'gen.rint_row', N'IF') IS NOT NULL
+		DROP FUNCTION gen.rint_row
+	IF OBJECT_ID(N'gen.rints', N'FN') IS NOT NULL
+		DROP FUNCTION gen.rints
+	IF OBJECT_ID('gen.v_rand', 'V') IS NOT NULL
+		DROP VIEW gen.v_rand;
+	IF OBJECT_ID(N'gen.generate_range', N'IF') IS NOT NULL
+		DROP FUNCTION gen.generate_range
+	IF OBJECT_ID(N'gen.days', N'FN') IS NOT NULL
+		DROP FUNCTION gen.days
+	IF OBJECT_ID(N'gen.seconds', N'FN') IS NOT NULL
+		DROP FUNCTION gen.seconds
+	IF OBJECT_ID(N'gen.minutes', N'FN') IS NOT NULL
+		DROP FUNCTION gen.minutes
+	IF OBJECT_ID(N'gen.hours', N'FN') IS NOT NULL
+		DROP FUNCTION gen.hours
+	IF OBJECT_ID(N'gen.ints', N'FN') IS NOT NULL
+		DROP FUNCTION gen.ints
+	IF OBJECT_ID(N'gen.decimals', N'FN') IS NOT NULL
+		DROP FUNCTION gen.decimals
+	IF OBJECT_ID(N'gen.strings', N'FN') IS NOT NULL
+		DROP FUNCTION gen.strings
+
+	EXEC gen.DropAllGeneratedFunctions;
+	
+	DROP TABLE gen.CreatedObjects;
+
+	EXEC('drop SCHEMA [gen]');
+END
+
+GO
+
+IF OBJECT_ID('gen.DropAllGeneratedFunctions', N'P') IS NOT NULL
+	DROP PROCEDURE gen.DropAllGeneratedFunctions
+GO
+CREATE PROCEDURE gen.DropAllGeneratedFunctions
+AS
+BEGIN
+	DECLARE @sql VARCHAR(MAX) = '';
+
+	SELECT @sql = @sql + DropStatement FROM gen.CreatedObjects;
+
+	EXEC (@sql);
+end
