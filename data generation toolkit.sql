@@ -307,6 +307,21 @@ END
 GO
 -- TODO: räkna rader i varje tabell, använd det för att rotera om N blir mer än row_count (1, 2, 3, 1, 2, 3 etc)
 
+
+IF OBJECT_ID('gen.DropAllGeneratedFunctions', N'P') IS NOT NULL
+	DROP PROCEDURE gen.DropAllGeneratedFunctions
+GO
+CREATE PROCEDURE gen.DropAllGeneratedFunctions
+AS
+BEGIN
+	DECLARE @sql VARCHAR(MAX) = '';
+
+	SELECT @sql = @sql + DropStatement FROM gen.CreatedObjects;
+
+	EXEC (@sql);
+end
+
+GO
 IF OBJECT_ID('gen.Uninstall', N'P') IS NOT NULL
 	DROP PROCEDURE gen.Uninstall
 GO
@@ -345,20 +360,12 @@ BEGIN
 	
 	DROP TABLE gen.CreatedObjects;
 
+	IF OBJECT_ID('gen.Uninstall', N'P') IS NOT NULL
+		DROP PROCEDURE gen.Uninstall
+	IF OBJECT_ID('gen.DropAllGeneratedFunctions', N'P') IS NOT NULL
+		DROP PROCEDURE gen.DropAllGeneratedFunctions
+
 	EXEC('drop SCHEMA [gen]');
 END
 
 GO
-
-IF OBJECT_ID('gen.DropAllGeneratedFunctions', N'P') IS NOT NULL
-	DROP PROCEDURE gen.DropAllGeneratedFunctions
-GO
-CREATE PROCEDURE gen.DropAllGeneratedFunctions
-AS
-BEGIN
-	DECLARE @sql VARCHAR(MAX) = '';
-
-	SELECT @sql = @sql + DropStatement FROM gen.CreatedObjects;
-
-	EXEC (@sql);
-end
