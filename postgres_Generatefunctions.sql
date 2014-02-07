@@ -3,10 +3,11 @@ create or replace function gen.generate_pk_functions()
 returns void
 as $$
 DECLARE
-	count INT;
-	goal INT;
-	c INT;
-	createdObject gen.CreatedObjects%ROWTYPE;
+	count integer;
+	goal integer;
+	c integer;
+	--createdObject gen.CreatedObjects%ROWTYPE;
+	createdObject RECORD;
 BEGIN
 
 	DROP TABLE IF EXISTS tempCreations;
@@ -14,14 +15,14 @@ BEGIN
 	CREATE TEMP TABLE tempCreations (functionCreation text, functiondrop text);
 	INSERT INTO tempCreations ( functionCreation, functiondrop )
 	SELECT 
-		REPLACE(REPLACE(REPLACE(REPLACE('CREATE OR REPLACE FUNCTION gen.getPK_TABLE_NAME(n BIGINT := 1)
+		REPLACE(REPLACE(REPLACE(REPLACE('CREATE OR REPLACE FUNCTION gen.getPK_TABLE_NAME(n BIGINT = 1)
 	RETURNS DATA_TYPE
 	AS ' || quote_literal('
 	BEGIN
-		(SELECT COLUMN_NAME 
+		SELECT COLUMN_NAME 
 		FROM TABLE_SCHEMA.TABLE_NAME
 		ORDER BY COLUMN_NAME
-		LIMIT 1 OFFSET (n - 1));
+		LIMIT 1 OFFSET (n - 1);
 	END; ')	
 	||  'LANGUAGE plpgsql;'
 		, 'TABLE_SCHEMA', TABLE_SCHEMA)
@@ -29,7 +30,7 @@ BEGIN
 		, 'COLUMN_NAME', COLUMN_NAME)
 		, 'DATA_TYPE', DATA_TYPE) AS functionCreation
 
-	,REPLACE('DROP FUNCTION IF EXIST gen.getPK_TABLE_NAME;',
+	,REPLACE('DROP FUNCTION IF EXISTS gen.getPK_TABLE_NAME(BIGINT);',
 			'TABLE_NAME', TABLE_NAME) AS functiondrop
 	FROM 
 	(
@@ -59,10 +60,10 @@ BEGIN
 	WHERE tables.keyCount = 1; -- exclude composit primary keyed tables for now
 
 
-
-	goal := (select COUNT(*) FROM tempCreations);
 	c := 0;
-	WHILE c < goal
+	goal := (select count(*) from tempCreations);
+	
+	WHILE (c < goal)
 	LOOP	
 		SELECT  
 			functionCreation,
@@ -73,13 +74,14 @@ BEGIN
 		ORDER BY functionCreation
 		LIMIT 1 OFFSET c;		
 
-		--EXECUTE (createdObject.DropStatement);
-		EXECUTE (createdObject.CreateStatement);
+		EXECUTE (createdObject.functiondrop);
+		EXECUTE (createdObject.functionCreation);
 
-		INSERT INTO gen.CreatedObjects(CreateStatement, DropStatement)
-		VALUES(createdObject.CreateStatement, createdObject.DropStatement);
-		
+		--INSERT INTO gen.CreatedObjects(CreateStatement, DropStatement)
+		--VALUES(createdObject.CreateStatement, createdObject.DropStatement);
+
 		c = c + 1;
+		
 	END LOOP;
 END
 $$ language plpgsql;
